@@ -5,9 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Development Commands
 
 ```bash
-# Build
+# Build (headless by default - no X11/Wayland dependencies)
 cargo build              # Debug build
 cargo build --release    # Release build (~27MB binary)
+
+# Build with desktop GUI (opt-in)
+cargo build --features desktop         # Desktop GUI with X11/Wayland
+cargo build --release --features desktop
 
 # Run
 cargo run -- <subcommand>   # Run with arguments
@@ -16,14 +20,21 @@ cargo run -- ask "question" # Single question
 cargo run -- daemon start   # Start daemon with HTTP server
 
 # Test
-cargo test                  # Run all tests
+cargo test                  # Run all tests (headless)
+cargo test --features desktop  # Test with desktop feature
 cargo test <test_name>      # Run specific test
 cargo test -- --nocapture   # Show test output
 
 # Lint
 cargo clippy
 cargo fmt --check
+
+# Verify feature configuration
+cargo tree -i winit                    # Should fail (not in default build)
+cargo tree --features desktop -i winit # Should show winit (in desktop build)
 ```
+
+**Note:** The default build is headless (no GUI dependencies). This allows compilation on Alpine Linux and other headless environments without special flags. Desktop GUI is opt-in via `--features desktop`.
 
 ## Architecture
 
@@ -48,6 +59,11 @@ LocalGPT is a local-only AI assistant with persistent markdown-based memory and 
 - **heartbeat/** - Autonomous task runner
   - `runner.rs` - Runs on configurable interval within active hours. Reads `HEARTBEAT.md` and executes pending tasks
 
+- **desktop/** - Optional desktop GUI (requires `--features desktop`)
+  - `app.rs` - Main eframe application
+  - `views/` - Chat, session, and status views
+  - Only compiled when `desktop` feature is enabled
+
 - **server/** - HTTP/WebSocket API
   - `http.rs` - Axum-based REST API. Note: creates new Agent per request (no session persistence via HTTP)
   - Endpoints: `/health`, `/api/status`, `/api/chat`, `/api/memory/search`, `/api/memory/stats`
@@ -59,12 +75,42 @@ LocalGPT is a local-only AI assistant with persistent markdown-based memory and 
 
 - **cli/** - Clap-based subcommands: `chat`, `ask`, `daemon`, `memory`, `config`
 
+### Feature Flags
+
+LocalGPT uses Cargo features to control optional dependencies:
+
+- **Default build** (`cargo build`):
+  - ✅ CLI (chat, ask, daemon, memory, config)
+  - ✅ HTTP server with REST API
+  - ✅ Web-based UI (embedded in daemon)
+  - ✅ All LLM providers (Anthropic, OpenAI, Ollama, Claude CLI)
+  - ✅ Memory system with semantic search
+  - ✅ Heartbeat autonomous tasks
+  - ❌ No X11/Wayland dependencies (headless-friendly)
+  - ❌ No desktop GUI window
+
+- **Desktop feature** (`cargo build --features desktop`):
+  - ✅ Everything in default build
+  - ✅ Native desktop window via eframe/egui
+  - ⚠️ Requires X11 or Wayland on Linux (pulls in `winit` crate)
+
+- **GGUF feature** (`cargo build --features gguf`):
+  - ✅ GGUF embedding model support via llama.cpp
+  - ⚠️ Requires C++ compiler
+
+**Why headless by default?**
+- Most deployments are servers/CLI (Docker, Alpine, CI/CD)
+- Avoids X11/Wayland compilation errors on headless systems
+- Desktop GUI is niche - better as opt-in
+- Makes `cargo build` work everywhere without special flags
+
 ### Key Patterns
 
 - Agent is not `Send+Sync` due to SQLite connections - HTTP handler uses `spawn_blocking`
 - Session compaction triggers memory flush (prompts LLM to save important context before truncating)
 - Memory context automatically loaded into new sessions: `MEMORY.md`, recent daily logs, `HEARTBEAT.md`
 - Tools use `shellexpand::tilde()` for path expansion
+- Desktop module is behind `#[cfg(feature = "desktop")]` and only compiled when enabled
 
 ## Configuration
 
