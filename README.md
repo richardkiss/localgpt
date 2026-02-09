@@ -18,12 +18,30 @@ A local device focused AI assistant built in Rust — persistent memory, autonom
 ## Install
 
 ```bash
-# Full install (includes desktop GUI)
+# Standard install (headless - CLI, daemon, HTTP API, Web UI)
 cargo install localgpt
 
-# Headless (no desktop GUI — for servers, Docker, CI)
-cargo install localgpt --no-default-features
+# With desktop GUI (optional - adds native window interface)
+cargo install localgpt --features desktop
 ```
+
+### Docker / Alpine Linux
+
+LocalGPT builds out-of-the-box on Alpine without any special flags:
+
+```bash
+# Using Docker Compose (easiest)
+docker-compose up -d
+
+# Or build manually
+docker build -f Dockerfile.alpine -t localgpt .
+docker run -d -v ~/.localgpt:/root/.localgpt -p 31327:31327 localgpt
+
+# Interactive chat
+docker run -it --rm -v ~/.localgpt:/root/.localgpt localgpt chat
+```
+
+**Note:** The default build is headless (no X11/Wayland dependencies). Desktop GUI is optional via `--features desktop`. See [Alpine & Docker Guide](docs/ALPINE_DOCKER.md) for details.
 
 ## Quick Start
 
@@ -56,7 +74,14 @@ LocalGPT uses plain markdown files as its memory:
     └── tech/
 ```
 
-Files are indexed with SQLite FTS5 for fast keyword search, and sqlite-vec for semantic search with local embeddings 
+Files are indexed with SQLite FTS5 for fast keyword search, and sqlite-vec for semantic search with local embeddings.
+
+### Interfaces
+
+- **CLI** - Interactive terminal chat (`localgpt chat`)
+- **Daemon** - Background service with HTTP API (`localgpt daemon start`)
+- **Web UI** - Browser-based interface (served by daemon)
+- **Desktop GUI** - Native window (optional, requires `--features desktop`) 
 
 ## Configuration
 

@@ -6,27 +6,63 @@ on:
   pull_request:
     branches: [main]
 
+# Minimal permissions for read-only CI
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    name: Check
+    name: Check (default/headless)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check
+      - name: Verify winit not in default build
+        run: |
+          if cargo tree -i winit 2>&1 | grep -q "winit v"; then
+            echo "ERROR: winit found in default build - should be headless!"
+            exit 1
+          fi
+          echo "✓ Confirmed: Default build is headless (no winit)"
+
+  check-desktop:
+    name: Check (with desktop feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --features desktop
+      - name: Verify winit in desktop build
+        run: |
+          if ! cargo tree --features desktop -i winit 2>&1 | grep -q "winit v"; then
+            echo "ERROR: winit not found in desktop build!"
+            exit 1
+          fi
+          echo "✓ Confirmed: Desktop build includes winit"
 
   test:
-    name: Test
+    name: Test (default/headless)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test
+
+  test-desktop:
+    name: Test (with desktop feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --features desktop
 
   clippy:
     name: Clippy

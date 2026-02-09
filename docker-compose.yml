@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  localgpt:
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    container_name: localgpt
+    restart: unless-stopped
+    ports:
+      - "31327:31327"
+    volumes:
+      # Mount workspace and config directory
+      - ~/.localgpt:/root/.localgpt
+      # Or use a named volume for workspace
+      # - localgpt-data:/root/.localgpt
+    environment:
+      # Optional: Set API keys via environment variables
+      # These will be used if config.toml has ${ENV_VAR} syntax
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOCALGPT_WORKSPACE=${LOCALGPT_WORKSPACE:-/root/.localgpt/workspace}
+    healthcheck:
+      test: ["CMD", "localgpt", "daemon", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    # Run daemon with HTTP server
+    command: ["daemon", "start"]
+
+# Optional: Use named volume instead of host mount
+# volumes:
+#   localgpt-data:
+
+# Usage:
+#
+# Start the service:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f
+#
+# Stop the service:
+#   docker-compose down
+#
+# Interactive chat (one-off):
+#   docker-compose run --rm localgpt chat
+#
+# Ask a question (one-off):
+#   docker-compose run --rm localgpt ask "What is Rust?"
+#
+# Rebuild after code changes:
+#   docker-compose build
+#   docker-compose up -d
