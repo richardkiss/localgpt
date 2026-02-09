@@ -21,9 +21,27 @@ A local device focused AI assistant built in Rust — persistent memory, autonom
 # Full install (includes desktop GUI)
 cargo install localgpt
 
-# Headless (no desktop GUI — for servers, Docker, CI)
+# Headless (no desktop GUI — for servers, Docker, CI, Alpine)
 cargo install localgpt --no-default-features
 ```
+
+### Docker / Alpine Linux
+
+For headless environments without X11/Wayland (recommended for servers and containers):
+
+```bash
+# Using Docker Compose (easiest)
+docker-compose up -d
+
+# Or build manually
+docker build -f Dockerfile.alpine -t localgpt .
+docker run -d -v ~/.localgpt:/root/.localgpt -p 31327:31327 localgpt
+
+# Interactive chat
+docker run -it --rm -v ~/.localgpt:/root/.localgpt localgpt chat
+```
+
+**Note:** Alpine/Docker builds require `--no-default-features` to avoid X11 dependencies. See [Alpine & Docker Guide](docs/ALPINE_DOCKER.md) for details.
 
 ## Quick Start
 
