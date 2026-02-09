@@ -1,70 +1,54 @@
 # Building LocalGPT on Alpine Linux / Docker
 
-This guide addresses the common compilation issue when building LocalGPT on headless Alpine Linux or in Docker containers.
+## TL;DR
 
-## The Problem
+**LocalGPT now builds headless by default.** Just run `cargo build` - no special flags needed for Alpine or Docker!
 
-By default, LocalGPT includes a `desktop` feature that enables a GUI via the `eframe` crate, which depends on `winit`. The `winit` crate requires either X11 or Wayland windowing support, which may not be available on headless Alpine Linux systems.
+The desktop GUI is opt-in via `--features desktop`.
 
-You may encounter this error:
+## Previous Issue (Now Resolved)
 
-```
-error: The platform you're compiling for is not supported by winit
-  --> /root/.cargo/registry/.../winit-0.30.12/src/platform_impl/mod.rs:78:1
-   |
-78 | compile_error!("The platform you're compiling for is not supported by winit");
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-```
+Prior versions included a desktop GUI by default, which required X11/Wayland support via the `winit` crate. This caused compilation failures on headless Alpine systems.
 
-## The Solution
+**As of version 0.1.2+**, the default build is headless. No more winit errors on Alpine!
 
-LocalGPT can be built **without GUI dependencies** by disabling the default features. This is the recommended approach for:
+## Building
 
-- Headless servers
-- Docker containers
-- Alpine Linux
-- CI/CD pipelines
-- Any environment without X11/Wayland
-
-## Building Without GUI
-
-### Using cargo install
+### Standard Build (Headless)
 
 ```bash
-# Headless build (no desktop GUI)
-cargo install localgpt --no-default-features
+# Just works on Alpine and everywhere else
+cargo build --release
+
+# Or install from crates.io
+cargo install localgpt
 ```
 
-### Using cargo build
+This gives you:
+- ✅ Full CLI (`localgpt chat`, `localgpt ask`, etc.)
+- ✅ HTTP daemon with API
+- ✅ Web-based UI
+- ✅ All memory, heartbeat, and agent features
+- ❌ No native desktop window (use `--features desktop` if needed)
+
+### With Desktop GUI (Optional)
 
 ```bash
-# Clone the repository
-git clone https://github.com/localgpt-app/localgpt.git
-cd localgpt
+# Enable desktop GUI feature
+cargo build --release --features desktop
 
-# Build without default features
-cargo build --release --no-default-features
-
-# The binary will be at target/release/localgpt
+# Or install with GUI
+cargo install localgpt --features desktop
 ```
 
-### Verifying No GUI Dependencies
+This adds:
+- ✅ All headless features above
+- ✅ Native desktop window via eframe/egui
+- ⚠️ Requires X11 or Wayland on Linux
 
-To confirm that `winit` is not included in the build:
+## Docker Examples
 
-```bash
-# This should return an error indicating winit is not in the dependency tree
-cargo tree --no-default-features -i winit
-```
-
-Expected output:
-```
-error: package ID specification `winit` did not match any packages
-```
-
-## Docker Example
-
-Here's a minimal Dockerfile for Alpine:
+### Minimal Alpine Dockerfile
 
 ```dockerfile
 FROM rust:alpine AS builder
@@ -75,37 +59,36 @@ RUN apk add --no-cache musl-dev pkgconf
 WORKDIR /build
 COPY . .
 
-# Build without GUI features
-RUN cargo build --release --no-default-features
+# Just build - no special flags needed!
+RUN cargo build --release
 
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates libgcc
 
 COPY --from=builder /build/target/release/localgpt /usr/local/bin/localgpt
-
-# Create workspace directory
-RUN mkdir -p /root/.localgpt/workspace
 
 ENTRYPOINT ["localgpt"]
 CMD ["daemon", "start"]
 ```
 
-### Build and run:
+See `Dockerfile.alpine` in the repo for the complete example.
+
+### Using Docker Compose
 
 ```bash
-# Build the image
-docker build -t localgpt .
+# Start daemon
+docker-compose up -d
 
-# Run daemon mode
-docker run -v ~/.localgpt:/root/.localgpt -p 31327:31327 localgpt
+# View logs
+docker-compose logs -f
 
-# Or run interactive chat
-docker run -it -v ~/.localgpt:/root/.localgpt localgpt chat
+# Interactive chat
+docker-compose run --rm localgpt chat
 ```
 
-## What You Get Without the Desktop Feature
+## What You Get in the Default Build
 
-When built with `--no-default-features`, LocalGPT still includes:
+The standard headless build includes:
 
 ✅ **Full CLI functionality**
 - `localgpt chat` - Interactive terminal chat
@@ -117,7 +100,7 @@ When built with `--no-default-features`, LocalGPT still includes:
 ✅ **HTTP API and Web UI**
 - RESTful API endpoints
 - WebSocket support
-- Embedded web-based interface (no desktop GUI needed)
+- Embedded web-based interface (no X11 needed)
 
 ✅ **All core features**
 - Persistent markdown memory
@@ -126,15 +109,15 @@ When built with `--no-default-features`, LocalGPT still includes:
 - Semantic search with local embeddings
 - Session management
 
-❌ **What's excluded**
-- Desktop GUI window (eframe/egui)
-- X11/Wayland dependencies
+❌ **Optional: Desktop GUI**
+- Add with `--features desktop` if you want a native window
+- Requires X11 or Wayland on Linux
 
 ## Alpine-Specific Notes
 
 ### System Dependencies
 
-Even without GUI dependencies, you may need these packages for building:
+For standard builds, you only need:
 
 ```bash
 apk add --no-cache \
@@ -144,16 +127,27 @@ apk add --no-cache \
   ca-certificates
 ```
 
-### Static Linking
+### For Desktop GUI on Alpine
 
-For a fully static binary that runs anywhere (including scratch containers):
+If you want the desktop GUI (`--features desktop`), also install:
 
 ```bash
-# Install musl target
-rustup target add x86_64-unknown-linux-musl
+apk add --no-cache \
+  libx11-dev \
+  libxcursor-dev \
+  libxrandr-dev \
+  libxi-dev \
+  libxinerama-dev \
+  libxkbcommon-dev
+```
 
-# Build static binary
-cargo build --release --no-default-features --target x86_64-unknown-linux-musl
+### Static Linking
+
+For a fully static binary:
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 ## CI/CD Example
@@ -161,7 +155,7 @@ cargo build --release --no-default-features --target x86_64-unknown-linux-musl
 For GitHub Actions or other CI systems:
 
 ```yaml
-name: Build Headless
+name: Build
 
 on: [push]
 
@@ -176,13 +170,15 @@ jobs:
         run: apk add --no-cache musl-dev pkgconf
       
       - name: Build
-        run: cargo build --release --no-default-features
+        run: cargo build --release
       
       - name: Test
-        run: cargo test --no-default-features
+        run: cargo test
 ```
 
-## Testing Your Headless Build
+No `--no-default-features` needed!
+
+## Testing Your Build
 
 After building, verify all features work:
 
@@ -205,48 +201,47 @@ After building, verify all features work:
 
 ## Troubleshooting
 
-### Still seeing winit errors?
-
-Make sure you're using `--no-default-features`:
-
-```bash
-cargo clean
-cargo build --release --no-default-features
-```
-
-### Want to confirm features?
-
-List enabled features:
-
-```bash
-cargo tree --no-default-features -e features | head -20
-```
-
 ### Need the desktop GUI?
 
-If you DO need the desktop GUI on Linux, install the required development packages:
+Enable it with the `desktop` feature:
 
 ```bash
-# For X11 support
-apk add \
-  libx11-dev \
-  libxcursor-dev \
-  libxrandr-dev \
-  libxi-dev \
-  libxinerama-dev \
-  libxkbcommon-dev \
-  pkgconf
+cargo build --release --features desktop
+```
 
-# Then build with default features
-cargo build --release
+Note: This requires X11 or Wayland dev packages on Linux (see above).
+
+### Verify your build configuration
+
+```bash
+# Check if winit is in the dependency tree (default: should not be)
+cargo tree -i winit
+
+# Check with desktop feature (winit should appear)
+cargo tree --features desktop -i winit
+```
+
+## Migration from Previous Versions
+
+If you were using `--no-default-features` before:
+
+**Old way:**
+```bash
+cargo build --no-default-features  # Required for headless
+cargo build                         # Included desktop GUI
+```
+
+**New way (0.1.2+):**
+```bash
+cargo build                         # Headless by default
+cargo build --features desktop      # Opt-in to GUI
 ```
 
 ## Summary
 
-The key takeaway: **Use `--no-default-features` for headless/server deployments.**
+**LocalGPT now builds headless by default** - no special flags needed for Alpine, Docker, or any headless environment!
 
-This completely removes the GUI and windowing dependencies while preserving all CLI, daemon, and API functionality.
+- Default: Headless (CLI + daemon + web UI)
+- Opt-in: Desktop GUI via `--features desktop`
 
-For more information, see:
-- [Main README](../README.md)
-- [Architecture Documentation](./architecture.md)
+This makes Alpine and Docker deployments trivial while still supporting desktop GUI for users who want it.

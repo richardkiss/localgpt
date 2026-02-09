@@ -1,5 +1,5 @@
 # LocalGPT Dockerfile for Alpine Linux (Headless)
-# This builds LocalGPT without GUI dependencies for minimal container size
+# Builds headless by default - no X11/Wayland dependencies needed!
 
 FROM rust:alpine AS builder
 
@@ -18,9 +18,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY config.example.toml ./
 
-# Build with no default features (excludes desktop GUI)
-# This avoids X11/Wayland dependencies
-RUN cargo build --release --no-default-features
+# Build (headless by default - no special flags needed!)
+RUN cargo build --release
 
 # Runtime stage - minimal Alpine image
 FROM alpine:latest

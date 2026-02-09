@@ -1,4 +1,5 @@
 # LocalGPT Dockerfile (Debian-based, Headless)
+# Builds headless by default - no X11/Wayland dependencies needed!
 # More compatible but larger than Alpine variant
 
 FROM rust:1-slim-bookworm AS builder
@@ -18,9 +19,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY config.example.toml ./
 
-# Build with no default features (excludes desktop GUI)
-# This avoids X11/Wayland dependencies
-RUN cargo build --release --no-default-features
+# Build (headless by default - no special flags needed!)
+RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim

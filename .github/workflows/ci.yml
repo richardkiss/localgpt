@@ -11,32 +11,39 @@ env:
 
 jobs:
   check:
-    name: Check
+    name: Check (default/headless)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check
+      - name: Verify winit not in default build
+        run: |
+          if cargo tree -i winit 2>&1 | grep -q "winit v"; then
+            echo "ERROR: winit found in default build - should be headless!"
+            exit 1
+          fi
+          echo "✓ Confirmed: Default build is headless (no winit)"
 
-  check-headless:
-    name: Check (headless, no X11)
+  check-desktop:
+    name: Check (with desktop feature)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --no-default-features
-      - name: Verify winit not in dependency tree
+      - run: cargo check --features desktop
+      - name: Verify winit in desktop build
         run: |
-          if cargo tree --no-default-features -i winit 2>&1 | grep -q "winit"; then
-            echo "ERROR: winit found in headless build dependency tree"
+          if ! cargo tree --features desktop -i winit 2>&1 | grep -q "winit v"; then
+            echo "ERROR: winit not found in desktop build!"
             exit 1
           fi
-          echo "✓ Confirmed: winit not in headless build"
+          echo "✓ Confirmed: Desktop build includes winit"
 
   test:
-    name: Test
+    name: Test (default/headless)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,14 +51,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test
 
-  test-headless:
-    name: Test (headless)
+  test-desktop:
+    name: Test (with desktop feature)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --no-default-features
+      - run: cargo test --features desktop
 
   clippy:
     name: Clippy
